@@ -2,11 +2,15 @@ import express from 'express';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import bodyParser from 'body-parser';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
+dotenv.config();
 // Determine __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,7 +34,70 @@ mongoose.connect('mongodb://localhost:27017/node_mongo_app', {
     useUnifiedTopology: true,
 }).then(() => console.log('Connected to MongoDB')).catch(err => console.error(err));
 
+
 // Mongoose Schemas and Models
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+});
+
+const User = mongoose.model('User', userSchema);
+
+// Seeder to create an admin user
+async function seedAdminUser() {
+  const adminExists = await User.findOne({ username: 'admin' });
+  if (!adminExists) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const admin = new User({
+          username: 'admin',
+          password: hashedPassword,
+      });
+      await admin.save();
+      console.log('Admin user created');
+  }
+}
+seedAdminUser();
+
+// Login API
+app.post('/admin/login', async (req, res) => {
+  try {
+      const { username, password } = req.body;
+      const user = await User.findOne({ username });
+      if (!user) {
+          return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+          return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, {
+          expiresIn: '1h',
+      });
+
+      res.json({ token });
+  } catch (error) {
+      res.status(500).send(error.message);
+  }
+});
+
+// Middleware for Admin Authentication
+function authenticateToken(req, res, next) {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) {
+      return res.status(401).json({ message: 'Access denied' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+      if (err) {
+          return res.status(403).json({ message: 'Invalid token' });
+      }
+      req.user = user;
+      next();
+  });
+}
+
 const titleSchema = new mongoose.Schema({
     text: { type: String, required: true },
     image: { type: String, required: true },
