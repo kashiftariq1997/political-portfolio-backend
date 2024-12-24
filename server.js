@@ -37,75 +37,76 @@ mongoose.connect('mongodb://localhost:27017/node_mongo_app', {
 
 // Mongoose Schemas and Models
 const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
 });
 
 const User = mongoose.model('User', userSchema);
 
 // Seeder to create an admin user
 async function seedAdminUser() {
-  const adminExists = await User.findOne({ username: 'admin' });
-  if (!adminExists) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      const admin = new User({
-          username: 'admin',
-          password: hashedPassword,
-      });
-      await admin.save();
-      console.log('Admin user created');
-  }
+    const adminExists = await User.findOne({ username: 'admin' });
+    if (!adminExists) {
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        const admin = new User({
+            username: 'admin',
+            password: hashedPassword,
+        });
+        await admin.save();
+        console.log('Admin user created');
+    }
 }
 seedAdminUser();
 
 // Login API
 app.post('/admin/login', async (req, res) => {
-  try {
-      const { username, password } = req.body;
-      const user = await User.findOne({ username });
-      if (!user) {
-          return res.status(401).json({ message: 'Invalid credentials' });
-      }
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
 
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-          return res.status(401).json({ message: 'Invalid credentials' });
-      }
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
 
-      const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, {
-          expiresIn: '1h',
-      });
+        const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, {
+            expiresIn: '1h',
+        });
 
-      res.json({ token });
-  } catch (error) {
-      res.status(500).send(error.message);
-  }
+        res.json({ token });
+    } catch (error) {
+        res.status(500).send(error.message);
+    }
 });
 
 // Middleware for Admin Authentication
 function authenticateToken(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) {
-      return res.status(401).json({ message: 'Access denied' });
-  }
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ message: 'Access denied' });
+    }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-      if (err) {
-          return res.status(403).json({ message: 'Invalid token' });
-      }
-      req.user = user;
-      next();
-  });
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Invalid token' });
+        }
+        req.user = user;
+        next();
+    });
 }
 
 const titleSchema = new mongoose.Schema({
     text: { type: String, required: true },
     image: { type: String, required: true },
+    active: { type: Boolean, default: true },
 });
 
 const contentSchema = new mongoose.Schema({
     text: { type: String, required: true },
-    image: { type: String, required: true },
+    image: { type: String },
     order: { type: Number, required: true },
     published: { type: Boolean, default: false },
 });
@@ -137,12 +138,19 @@ const upload = multer({
 
 // Admin APIs
 // Create Title
-app.post('/admin/title', upload.single('image'), async (req, res) => {
+app.post('/admin/titles', upload.single('image'), async (req, res) => {
     try {
-        const { text } = req.body;
+        const { text, active } = req.body;
         const image = `/temp/${req.file.filename}`;
-        const title = new Title({ text, image });
+
+        // Deactivate other titles if this one is active
+        if (active === "true") {
+            await Title.updateMany({}, { $set: { active: false } });
+        }
+
+        const title = new Title({ text, image, active: active === "true" });
         await title.save();
+
         res.status(201).send(title);
     } catch (err) {
         res.status(400).send(err.message);
@@ -150,9 +158,9 @@ app.post('/admin/title', upload.single('image'), async (req, res) => {
 });
 
 // Update Title
-app.put('/admin/title/:id', upload.single('image'), async (req, res) => {
+app.put('/admin/titles/:id', upload.single('image'), async (req, res) => {
     try {
-        const { text } = req.body;
+        const { text, active } = req.body;
         const title = await Title.findById(req.params.id);
 
         if (!title) {
@@ -160,6 +168,7 @@ app.put('/admin/title/:id', upload.single('image'), async (req, res) => {
         }
 
         const updateData = { text };
+
         if (req.file) {
             // Delete the old image
             const oldImagePath = path.join(__dirname, title.image);
@@ -170,6 +179,14 @@ app.put('/admin/title/:id', upload.single('image'), async (req, res) => {
             updateData.image = `/temp/${req.file.filename}`;
         }
 
+        // Deactivate other titles if this one is active
+        if (active === "true") {
+            await Title.updateMany({}, { $set: { active: false } });
+            updateData.active = true;
+        } else {
+            updateData.active = false;
+        }
+
         const updatedTitle = await Title.findByIdAndUpdate(req.params.id, updateData, { new: true });
         res.send(updatedTitle);
     } catch (err) {
@@ -178,7 +195,7 @@ app.put('/admin/title/:id', upload.single('image'), async (req, res) => {
 });
 
 // Create Content
-app.post('/admin/content', upload.single('image'), async (req, res) => {
+app.post('/admin/contents', upload.single('image'), async (req, res) => {
     try {
         const { text, published } = req.body;
         const image = `/temp/${req.file.filename}`;
@@ -196,7 +213,7 @@ app.post('/admin/content', upload.single('image'), async (req, res) => {
 });
 
 // Update Content
-app.put('/admin/content/:id', upload.single('image'), async (req, res) => {
+app.put('/admin/contents/:id', upload.single('image'), async (req, res) => {
     try {
         const { text, order, published } = req.body;
         const contentToUpdate = await Content.findById(req.params.id);
@@ -241,12 +258,53 @@ app.put('/admin/content/:id', upload.single('image'), async (req, res) => {
     }
 });
 
+app.get('/admin/contents', async (req, res) => {
+    try {
+        const contents = await Content.find().sort({ order: 1 });
+        res.send(contents);
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+
+app.get('/admin/titles', async (req, res) => {
+    try {
+        const titles = await Title.find();
+        res.send(titles);
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+
 // Public APIs
 // Get Titles
 app.get('/public/titles', async (req, res) => {
     try {
-        const titles = await Title.find();
-        res.send(titles);
+        const titles = await Title.find({ active: true });
+
+        if (titles.length) {
+            res.send(titles);
+        } else {
+            const inactive = await Title.find();
+            res.send(inactive);
+        }
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+app.get('/public/titles/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const title = await Title.findById(id);
+
+        if (!title) {
+            return res.status(404).send("Title not found");
+        }
+
+        res.send(title);
     } catch (err) {
         res.status(400).send(err.message);
     }
@@ -257,6 +315,21 @@ app.get('/public/contents', async (req, res) => {
     try {
         const contents = await Content.find({ published: true }).sort({ order: 1 });
         res.send(contents);
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+app.get('/public/contents/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const content = await Content.findById(id);
+
+        if (!content) {
+            return res.status(404).send("Content not found");
+        }
+
+        res.send(content);
     } catch (err) {
         res.status(400).send(err.message);
     }
