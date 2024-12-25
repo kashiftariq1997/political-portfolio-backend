@@ -277,6 +277,29 @@ app.get('/admin/titles', async (req, res) => {
     }
 });
 
+app.delete('/admin/contents/:id', async (req, res) => {
+    try {
+        const content = await Content.findByIdAndDelete(req.params.id);
+        if (!content) {
+            return res.status(404).send('Content not found');
+        }
+        res.status(200).send({ message: 'Content deleted successfully', content });
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+app.delete('/admin/titles/:id', async (req, res) => {
+    try {
+        const title = await Title.findByIdAndDelete(req.params.id);
+        if (!title) {
+            return res.status(404).send('Title not found');
+        }
+        res.status(200).send({ message: 'Title deleted successfully', title });
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
 
 // Public APIs
 // Get Titles
