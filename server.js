@@ -144,7 +144,7 @@ const VolunteerSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    date: {
+    dateOfBirth: {
       type: Date,
       required: true,
     },
@@ -456,7 +456,7 @@ app.post("/vote", async (req, res) => {
 app.post("/volunteer", async (req, res) => {
   console.log(">>>>>>>>>>>>>>>>>>>:::::::::::::::::;", req.body);
   try {
-    const { firstName, lastName, email, phone, date, gender, address } =
+    const { firstName, lastName, email, phone, dateOfBirth, gender, address } =
       req.body;
     const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
@@ -472,7 +472,7 @@ app.post("/volunteer", async (req, res) => {
       lastName,
       email,
       phone,
-      date,
+      dateOfBirth,
       gender,
       address,
       ip: clientIp,
