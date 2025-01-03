@@ -427,15 +427,15 @@ app.post("/vote", async (req, res) => {
   const { partyName } = req.body;
 
   const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-  console.log("Client IP Address:", clientIp);
+  // console.log("Client IP Address:", clientIp);
 
   try {
-    const existingVote = await Vote.findOne({ ip: clientIp });
-    if (existingVote) {
-      return res.status(400).json({
-        message: "You already voted",
-      });
-    }
+    // const existingVote = await Vote.findOne({ ip: clientIp });
+    // if (existingVote) {
+    //   return res.status(400).json({
+    //     message: "You already voted",
+    //   });
+    // }
     const newVote = await Vote.create({
       ip: clientIp,
       partyName,
@@ -459,7 +459,6 @@ app.post("/volunteer", async (req, res) => {
     const { firstName, lastName, email, phone, dateOfBirth, gender, address } =
       req.body;
     const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
     const existingVolunteer = await Volunteer.findOne({ email });
     if (existingVolunteer) {
       return res.status(400).json({
